@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lenticular Ultimate - Wide Reflection</title>
+    <style>
+        /* --- ESTILO GERAL --- */
+        body { margin: 0; overflow: hidden; background-color: #000510; font-family: 'Segoe UI', sans-serif; color: white; }
+        canvas { display: block; }
+
+        /* --- UI LAYER --- */
+        #loading-layer { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; text-align: center; mix-blend-mode: overlay; transition: opacity 0.5s; z-index: 10; }
+        .loading-bar { width: 200px; height: 2px; background: rgba(255,255,255,0.1); margin: 10px auto; position: relative; overflow: hidden; }
+        .loading-progress { position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: #4fc3f7; transition: width 0.3s; box-shadow: 0 0 10px #4fc3f7; }
+
+        /* --- MENU HAMBÚRGUER --- */
+        #menu-trigger { position: absolute; top: 0; right: 0; width: 100px; height: 100px; z-index: 100; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+        .hamburger-icon { position: absolute; top: 20px; right: 20px; width: 40px; display: flex; flex-direction: column; gap: 6px; opacity: 0.6; transition: all 0.3s ease; background: rgba(255, 255, 255, 0.1); padding: 10px; border-radius: 8px; backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.2); }
+        @media (hover: hover) { .hamburger-icon { opacity: 0; transform: translateX(10px); } #menu-trigger:hover .hamburger-icon { opacity: 1; transform: translateX(0); } }
+        .line { width: 100%; height: 3px; background-color: rgba(255, 255, 255, 0.9); border-radius: 2px; box-shadow: 0 0 10px rgba(79, 195, 247, 0.5); }
+
+        /* --- PAINEL "FROSTED GRAIN GLASS" COM REFLEXO ESPALHADO --- */
+        #settings-panel { 
+            position: absolute; top: 0; right: 0; width: 340px; height: 100vh; 
+            
+            /* BASE DO VIDRO */
+            background-color: rgba(20, 25, 40, 0.5); /* Base escura semitransparente */
+            backdrop-filter: blur(30px) saturate(180%);
+            -webkit-backdrop-filter: blur(30px) saturate(180%);
+
+            /* 1. BORDA FÍSICA SUTIL */
+            border-left: 1px solid rgba(255, 255, 255, 0.2);
+            
+            /* 2. REFLEXOS ESPALHADOS (HIGHLIGHTS) */
+            box-shadow: 
+                /* Reflexo forte na quina (luz principal) */
+                inset 20px 0 30px -5px rgba(255, 255, 255, 0.15),
+                /* Reflexo largo e suave (luz espalhada no vidro) */
+                inset 120px 0 150px -30px rgba(255, 255, 255, 0.08),
+                /* Sombra externa para profundidade */
+                -20px 0 70px rgba(0, 0, 0, 0.8);
+
+            transform: translateX(100%); 
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); 
+            z-index: 99; 
+            padding: 60px 25px 25px 25px; 
+            box-sizing: border-box; 
+            display: flex; flex-direction: column; gap: 12px; 
+            overflow-y: auto;
+        }
+        
+        /* A GRANULAÇÃO (NOISE TEXTURE) */
+        #settings-panel::before {
+            content: "";
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0.07; pointer-events: none; z-index: -1;
+            /* Textura de Ruído SVG em Base64 */
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        #settings-panel.open { transform: translateX(0); }
+        
+        /* --- SCROLLBAR --- */
+        #settings-panel::-webkit-scrollbar { width: 10px; }
+        #settings-panel::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-left: 1px solid rgba(255,255,255,0.05); }
+        #settings-panel::-webkit-scrollbar-thumb { 
+            background: rgba(255, 255, 255, 0.3); 
+            border-radius: 5px; border: 2px solid rgba(0,0,0,0); background-clip: content-box;
+        }
+        #settings-panel::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.6); }
+
+        /* ELEMENTOS DO PAINEL */
+        h2 { font-weight: 300; margin: 0; letter-spacing: 1px; color: #fff; text-shadow: 0 0 20px rgba(255, 255, 255, 0.4); font-size: 1.4rem; }
+        h3 { font-size: 0.85rem; text-transform: uppercase; color: rgba(255,255,255,0.7); margin: 8px 0 4px 0; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
+        label { display: block; font-size: 0.8rem; margin-bottom: 4px; color: #ddd; }
+        
+        /* INPUTS GLASS */
+        input[type="text"], select { 
+            width: 100%; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255,255,255,0.1); 
+            color: white; padding: 10px; border-radius: 6px; font-family: inherit; outline: none; transition: 0.3s; 
+            box-sizing: border-box; font-size: 0.9rem;
+        }
+        input:focus, select:focus { 
+            border-color: rgba(255,255,255,0.5); background: rgba(255, 255, 255, 0.05); 
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1); 
+        }
+        option { background-color: #001020; color: white; }
+
+        .file-upload-container { 
+            border: 1px dashed rgba(255, 255, 255, 0.3); border-radius: 8px; 
+            background: rgba(255, 255, 255, 0.02); padding: 10px; transition: 0.3s; 
+        }
+        .file-upload-container:hover { background: rgba(255, 255, 255, 0.05); border-color: white; }
+        .file-upload-btn { display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px; color: #eee; cursor: pointer; text-align: center; font-size: 0.9rem; }
+        
+        .status-msg { font-size: 0.75rem; margin-top: 5px; text-align: center; min-height: 1.2em; }
+        .status-web { color: #888; }
+        .status-local { color: #4fc3f7; font-weight: bold; text-shadow: 0 0 8px rgba(79, 195, 247, 0.6); }
+
+        .btn-action { border: none; border-radius: 6px; cursor: pointer; font-weight: bold; padding: 10px; width: 100%; transition: transform 0.2s, box-shadow 0.2s; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8rem; }
+        .btn-apply { 
+            background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(5px); color: white; padding: 12px; 
+        }
+        .btn-apply:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-2px); box-shadow: 0 0 20px rgba(255, 255, 255, 0.2); }
+        .btn-clear { background: rgba(255, 80, 80, 0.1); border: 1px solid rgba(255, 80, 80, 0.3); color: #ff8080; display: none; }
+        .btn-clear:hover { background: rgba(255, 80, 80, 0.3); color: white; box-shadow: 0 0 10px rgba(255, 80, 80, 0.4); }
+        
+        .close-btn { position: absolute; top: 15px; left: 15px; font-size: 28px; cursor: pointer; color: rgba(255, 255, 255, 0.5); padding: 5px; transition: 0.3s; }
+        .close-btn:hover { color: white; text-shadow: 0 0 10px white; transform: rotate(90deg); }
+    </style>
+</head>
+<body>
+
+    <div id="loading-layer">
+        <div id="status-text">Inicializando Sistema...</div>
+        <div class="loading-bar"><div class="loading-progress" id="progress-bar"></div></div>
+    </div>
+
+    <div id="menu-trigger" onclick="toggleMenu()">
+        <div class="hamburger-icon"><div class="line"></div><div class="line"></div><div class="line"></div></div>
+    </div>
+
+    <div id="settings-panel">
+        <div class="close-btn" onclick="toggleMenu()">&times;</div>
+        
+        <h2>Configurações</h2>
+
+        <div>
+            <label>✨ Qualidade & Performance</label>
+            <select id="quality-select">
+                <option value="standard">🚀 Standard (Super Leve)</option>
+                <option value="low">🟢 HD - Low (PC Antigo)</option>
+                <option value="medium">🟡 HD - Medium (Equilibrado)</option>
+                <option value="ultra">🔥 HD - Ultra (Gamer)</option>
+            </select>
+        </div>
+
+        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 5px 0;">
+
+        <div>
+            <label>⏱️ Tempo de Troca</label>
+            <select id="timer-select">
+                <option value="0">Infinito (Manual)</option>
+                <option value="0.5">Demo (30 seg)</option>
+                <option value="1">1 Minuto</option>
+                <option value="5">5 Minutos</option>
+                <option value="10">10 Minutos</option>
+            </select>
+        </div>
+
+        <h3>🌐 Internet</h3>
+        <div id="internet-section">
+            <label>Tema 1 (Esq)</label><input type="text" id="theme1" placeholder="Ex: floresta">
+            <div style="height: 5px;"></div>
+            <label>Tema 2 (Dir)</label><input type="text" id="theme2" placeholder="Ex: oceano">
+            <div class="status-msg status-web" id="web-status-msg">*Vazio = Aleatório</div>
+        </div>
+
+        <h3>📂 Local</h3>
+        <div class="file-upload-container">
+            <input type="file" id="folder-input" webkitdirectory directory multiple style="display: none;">
+            <label for="folder-input" class="file-upload-btn">Selecionar Pasta</label>
+            <div id="local-status-msg" class="status-msg status-web">Nenhuma pasta</div>
+            <button id="clear-local-btn" class="btn-action btn-clear" onclick="clearLocalFiles()">Usar Internet</button>
+        </div>
+
+        <button class="btn-action btn-apply" onclick="applySettings()">Aplicar Mudanças</button>
+        <div style="height: 20px;"></div>
+    </div>
+    
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const STATE = {
+            width: 0, height: 0, 
+            targetRatio: 0.5, currentRatio: 0.5, 
+            mouseX: 0, mouseY: 0, 
+            time: 0, autoChangeInterval: null, isUpdating: false, timerMinutes: 0,
+            theme1: '', theme2: '', localFiles: [], usingLocal: false,
+            quality: 'standard', isHD: false,
+            domColor1: {r:0, g:10, b:20}, domColor2: {r:0, g:10, b:20}
+        };
+
+        const QUALITY_PRESETS = {
+            'standard': { gap: 9, size: 7, hd: false }, 
+            'low':      { gap: 8, size: 6, hd: true },  
+            'medium':   { gap: 6, size: 4, hd: true },  
+            'ultra':    { gap: 3, size: 2, hd: true }   
+        };
+
+        let CONFIG = {
+            gap: 8, particleSize: 6, friction: 0.06, ease: 0.07,    
+            safeZoneStart: 0.25, safeZoneEnd: 0.75, maxGlowOpacity: 0.3, glowScale: 2.0,
+            bleed: 120 
+        };
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false }); 
+        const statusText = document.getElementById('status-text');
+        const progressBar = document.getElementById('progress-bar');
+        const loadingLayer = document.getElementById('loading-layer');
+        const panel = document.getElementById('settings-panel');
+        const timerSelect = document.getElementById('timer-select');
+        const qualitySelect = document.getElementById('quality-select');
+        const themeInput1 = document.getElementById('theme1');
+        const themeInput2 = document.getElementById('theme2');
+        const folderInput = document.getElementById('folder-input');
+        const localStatusMsg = document.getElementById('local-status-msg');
+        const webStatusMsg = document.getElementById('web-status-msg');
+        const clearLocalBtn = document.getElementById('clear-local-btn');
+        const internetSection = document.getElementById('internet-section');
+
+        let particles = [];
+        let rays = [];
+
+        function getAverageRGB(imgEl) {
+            const c = document.createElement('canvas'); const cx = c.getContext('2d');
+            c.width = 50; c.height = 50;
+            cx.drawImage(imgEl, 0, 0, 50, 50);
+            const data = cx.getImageData(0, 0, 50, 50).data;
+            let r=0, g=0, b=0, count = data.length/4;
+            for (let i=0; i<data.length; i+=4) { r+=data[i]; g+=data[i+1]; b+=data[i+2]; }
+            const factor = 0.25;
+            return { r: (r/count)*factor|0, g: (g/count)*factor|0, b: (b/count)*factor|0 };
+        }
+
+        class Particle {
+            constructor(x, y) {
+                this.x = x; this.y = y; this.originX = x; this.originY = y;
+                this.colorA = [0,0,0]; this.colorB = [0,0,0];
+                this.vx = (Math.random() - 0.5) * 80; this.vy = (Math.random() - 0.5) * 80;
+                this.myFriction = CONFIG.friction + (Math.random() * 0.03); this.danceEnergy = 0; 
+            }
+            setColors(cA, cB) { this.colorA = cA; this.colorB = cB; this.danceEnergy = 1.0; }
+            update() {
+                let localRatio = 0;
+                if (STATE.currentRatio < CONFIG.safeZoneStart) localRatio = 0;
+                else if (STATE.currentRatio > CONFIG.safeZoneEnd) localRatio = 1;
+                else {
+                    let t = (STATE.currentRatio - CONFIG.safeZoneStart) / (CONFIG.safeZoneEnd - CONFIG.safeZoneStart);
+                    localRatio = t * t * (3 - 2 * t);
+                }
+
+                let distortion = Math.sin(localRatio * Math.PI);
+                if (this.danceEnergy > 0.01) { this.danceEnergy *= 0.96; distortion += this.danceEnergy * 2; }
+
+                let mouseOffsetX = 0;
+                let mouseOffsetY = 0;
+
+                if (STATE.isHD) {
+                    const dx = STATE.mouseX - (STATE.width / 2);
+                    const dy = STATE.mouseY - (STATE.height / 2);
+                    const dynamicForce = 0.02 + (this.danceEnergy * 0.18);
+                    mouseOffsetX = dx * dynamicForce;
+                    mouseOffsetY = dy * dynamicForce;
+                }
+
+                const tx = this.originX + (this.vx * distortion) + mouseOffsetX;
+                const ty = this.originY + (this.vy * distortion) + mouseOffsetY;
+
+                this.x += (tx - this.x) * this.myFriction;
+                this.y += (ty - this.y) * this.myFriction;
+
+                const r = this.colorA[0] + (this.colorB[0] - this.colorA[0]) * localRatio;
+                const g = this.colorA[1] + (this.colorB[1] - this.colorA[1]) * localRatio;
+                const b = this.colorA[2] + (this.colorB[2] - this.colorA[2]) * localRatio;
+                const finalR = r|0; const finalG = g|0; const finalB = b|0;
+
+                if (STATE.isHD && STATE.quality !== 'ultra') {
+                    if (this.danceEnergy > 0.1) {
+                         const glowOp = (distortion * 0.2);
+                         if(glowOp > 0.05) {
+                            ctx.fillStyle = `rgba(${finalR},${finalG},${finalB},${glowOp})`;
+                            ctx.fillRect(this.x-1, this.y-1, CONFIG.particleSize+2, CONFIG.particleSize+2);
+                         }
+                    }
+                }
+
+                ctx.fillStyle = `rgb(${finalR}, ${finalG}, ${finalB})`;
+                ctx.fillRect(this.x, this.y, CONFIG.particleSize, CONFIG.particleSize);
+            }
+        }
+
+        class LightRay {
+            constructor() { this.init(); }
+            init() {
+                this.x = Math.random() * STATE.width; this.width = Math.random() * 100 + 50;
+                this.angle = (Math.random() - 0.5) * 0.2; this.speed = Math.random() * 0.002 + 0.001;
+                this.opacity = Math.random() * 0.08 + 0.02; this.offset = Math.random() * 100;
+            }
+            draw() {
+                const sway = Math.sin(STATE.time * 0.5 + this.offset) * 50; 
+                const startX = this.x + Math.sin(STATE.time * 0.2 + this.offset) * 20;
+                const endX = this.x + sway + (this.angle * STATE.height);
+                const gradient = ctx.createLinearGradient(0, 0, 0, STATE.height);
+                gradient.addColorStop(0, `rgba(200, 240, 255, ${this.opacity})`);
+                gradient.addColorStop(1, `rgba(0, 50, 100, 0)`);
+                ctx.fillStyle = gradient; ctx.beginPath();
+                ctx.moveTo(startX - this.width/2, -50); ctx.lineTo(startX + this.width/2, -50);
+                ctx.lineTo(endX + this.width, STATE.height + 50); ctx.lineTo(endX - this.width, STATE.height + 50);
+                ctx.closePath(); ctx.fill();
+            }
+        }
+
+        folderInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            STATE.localFiles = files.filter(f => f.type.startsWith('image/'));
+            if (STATE.localFiles.length > 0) { STATE.usingLocal = true; updateUIState(); } 
+            else { alert("Sem imagens."); }
+        });
+        function clearLocalFiles() { STATE.localFiles = []; STATE.usingLocal = false; folderInput.value = ""; updateUIState(); }
+        function updateUIState() {
+            if (STATE.usingLocal) {
+                localStatusMsg.innerText = `📂 ${STATE.localFiles.length} imagens.`;
+                localStatusMsg.classList.add('status-local'); localStatusMsg.classList.remove('status-web');
+                clearLocalBtn.style.display = 'block'; internetSection.style.opacity = '0.3'; internetSection.style.pointerEvents = 'none';
+            } else {
+                localStatusMsg.innerText = "Nenhuma pasta";
+                localStatusMsg.classList.remove('status-local'); localStatusMsg.classList.add('status-web');
+                clearLocalBtn.style.display = 'none'; internetSection.style.opacity = '1'; internetSection.style.pointerEvents = 'auto';
+            }
+        }
+        function generateUrl(t) {
+            const w=1280, h=720, s=Math.floor(Math.random()*99999);
+            return (t && t.trim()!=="") ? `https://loremflickr.com/${w}/${h}/${t.trim()}?random=${s}` : `https://picsum.photos/seed/${s}/${w}/${h}`;
+        }
+        async function getNextImageSource(is2) {
+            if (STATE.usingLocal && STATE.localFiles.length > 0) {
+                return URL.createObjectURL(STATE.localFiles[Math.floor(Math.random() * STATE.localFiles.length)]);
+            }
+            return generateUrl(is2 ? STATE.theme2 : STATE.theme1);
+        }
+        async function loadImage(url) {
+            return new Promise((r, j) => { const i = new Image(); i.crossOrigin = "Anonymous"; i.onload = () => r(i); i.onerror = j; i.src = url; });
+        }
+        function getPixelData(img) {
+            const c = document.createElement('canvas'); const x = c.getContext('2d');
+            c.width = STATE.width; c.height = STATE.height;
+            const r = Math.max(STATE.width/img.width, STATE.height/img.height);
+            const dw = img.width*r, dh = img.height*r;
+            x.drawImage(img, (STATE.width-dw)/2, (STATE.height-dh)/2, dw, dh);
+            return x.getImageData(0, 0, STATE.width, STATE.height).data;
+        }
+
+        function toggleMenu() { panel.classList.toggle('open'); }
+        function applySettings() {
+            STATE.timerMinutes = parseFloat(timerSelect.value); 
+            STATE.theme1 = themeInput1.value; STATE.theme2 = themeInput2.value;
+            const q = qualitySelect.value; STATE.quality = q;
+            const preset = QUALITY_PRESETS[q];
+            CONFIG.gap = preset.gap; CONFIG.particleSize = preset.size; STATE.isHD = preset.hd;
+            resetAutoChangeTimer(); updateImagesCycle(); toggleMenu();
+        }
+        function resetAutoChangeTimer() {
+            if (STATE.autoChangeInterval) clearInterval(STATE.autoChangeInterval);
+            if (STATE.timerMinutes > 0) { STATE.autoChangeInterval = setInterval(updateImagesCycle, STATE.timerMinutes * 60000); }
+        }
+        
+        async function updateImagesCycle() {
+            if (STATE.isUpdating) return; STATE.isUpdating = true;
+            loadingLayer.style.opacity = 1; statusText.innerText = "Carregando..."; progressBar.style.width = "10%";
+            try {
+                const s1 = await getNextImageSource(false); let s2 = await getNextImageSource(true);
+                if (STATE.usingLocal && s1 === s2 && STATE.localFiles.length > 1) s2 = await getNextImageSource(true);
+                const [i1, i2] = await Promise.all([loadImage(s1), loadImage(s2)]);
+                STATE.domColor1 = getAverageRGB(i1); STATE.domColor2 = getAverageRGB(i2);
+                progressBar.style.width = "60%"; statusText.innerText = "Gerando Partículas...";
+                const d1 = getPixelData(i1); const d2 = getPixelData(i2);
+                
+                particles = []; 
+                const bleed = CONFIG.bleed; 
+                
+                for (let y = -bleed; y < STATE.height + bleed; y += CONFIG.gap) {
+                    for (let x = -bleed; x < STATE.width + bleed; x += CONFIG.gap) {
+                        const safeX = Math.max(0, Math.min(Math.floor(x), STATE.width - 1));
+                        const safeY = Math.max(0, Math.min(Math.floor(y), STATE.height - 1));
+                        const i = (safeY * STATE.width + safeX) * 4;
+                        if (d1[i] === undefined || d2[i] === undefined) continue;
+
+                        const p = new Particle(x, y);
+                        p.setColors([d1[i], d1[i+1], d1[i+2]], [d2[i], d2[i+1], d2[i+2]]);
+                        particles.push(p);
+                    }
+                }
+                progressBar.style.width = "100%"; setTimeout(() => { loadingLayer.style.opacity = 0; progressBar.style.width = "0%"; STATE.isUpdating = false; }, 800);
+            } catch (e) { console.error(e); statusText.innerText = "Erro."; STATE.isUpdating = false; }
+        }
+
+        async function init() {
+            STATE.width = window.innerWidth; STATE.height = window.innerHeight;
+            canvas.width = STATE.width; canvas.height = STATE.height;
+            rays = []; for(let i=0; i<7; i++) rays.push(new LightRay());
+            particles = []; updateImagesCycle(); animate();
+        }
+
+        function animate() {
+            STATE.time += 0.01;
+            if (STATE.isHD) {
+                let t = Math.max(0, Math.min(1, STATE.currentRatio));
+                const r = STATE.domColor1.r + (STATE.domColor2.r - STATE.domColor1.r) * t;
+                const g = STATE.domColor1.g + (STATE.domColor2.g - STATE.domColor1.g) * t;
+                const b = STATE.domColor1.b + (STATE.domColor2.b - STATE.domColor1.b) * t;
+                ctx.fillStyle = `rgb(${r|0}, ${g|0}, ${b|0})`;
+            } else {
+                const g = ctx.createLinearGradient(0, 0, 0, STATE.height);
+                g.addColorStop(0, '#001020'); g.addColorStop(1, '#000000');
+                ctx.fillStyle = g;
+            }
+            ctx.fillRect(0, 0, STATE.width, STATE.height);
+
+            ctx.globalCompositeOperation = 'screen'; 
+            rays.forEach(r => r.draw());
+            ctx.globalCompositeOperation = 'source-over';
+
+            STATE.currentRatio += (STATE.targetRatio - STATE.currentRatio) * CONFIG.ease;
+            for(let i = 0; i < particles.length; i++) particles[i].update();
+            requestAnimationFrame(animate);
+        }
+
+        function updateInteraction(clientX, clientY) { 
+            STATE.targetRatio = Math.max(0, Math.min(1, clientX / STATE.width)); 
+            STATE.mouseX = clientX;
+            STATE.mouseY = clientY;
+        }
+        window.addEventListener('mousemove', e => updateInteraction(e.clientX, e.clientY));
+        window.addEventListener('touchmove', e => { e.preventDefault(); updateInteraction(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+        window.addEventListener('resize', () => location.reload());
+        init();
+    </script>
+</body>
+</html>
